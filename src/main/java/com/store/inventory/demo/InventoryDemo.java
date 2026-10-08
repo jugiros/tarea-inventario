@@ -56,6 +56,19 @@ public final class InventoryDemo {
         } catch (RuntimeException e) {
             System.out.println("Expected failure confirming an expired reservation: " + e.getMessage());
         }
+
+        service.registerProduct("SKU-4", ProductCategory.STANDARD);
+        service.addStock("SKU-4", 10);
+        service.reserve("ORDER-5", "SKU-4", 4);
+        service.reserve("ORDER-5", "SKU-4", 4);
+        System.out.println("Available after retrying the same order twice (no double reservation): "
+                + service.available("SKU-4"));
+
+        try {
+            service.reserve("ORDER-5", "SKU-4", 9);
+        } catch (RuntimeException e) {
+            System.out.println("Expected failure retrying the same order with different data: " + e.getMessage());
+        }
     }
 
     /**

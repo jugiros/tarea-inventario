@@ -15,8 +15,8 @@ class Product {
 
     private final ProductCategory category;
     private final Map<String, Reservation> activeReservations = new HashMap<>();
+    private final Map<String, Reservation> confirmedReservations = new HashMap<>();
     private int stock;
-    private int confirmed;
 
     Product(ProductCategory category) {
         this.category = category;
@@ -37,11 +37,17 @@ class Product {
         if (quantity <= 0) {
             throw new IllegalArgumentException("Quantity must be positive: " + quantity);
         }
+        releaseExpiredReservations(now);
+
+        Reservation retried = retryOf(orderId, sku, quantity);
+        if (retried != null) {
+            return retried;
+        }
+
         CategoryPolicy policy = CategoryPolicies.of(category);
         if (quantity > policy.orderLimit()) {
             throw new OrderLimitExceededException(sku, quantity, policy.orderLimit());
         }
-        releaseExpiredReservations(now);
         if (quantity > available(now)) {
             throw new InsufficientStockException(sku, quantity, available(now));
         }
@@ -50,17 +56,38 @@ class Product {
         return reservation;
     }
 
+    /**
+     * Retries of the same order (e.g. the mobile app resending a slow request) must not double-reserve
+     * or fail just because the order was already handled. Returns the existing reservation when the
+     * retry matches it, {@code null} when this is a brand new order, or fails when the retry conflicts
+     * with a previous call for the same order.
+     */
+    private Reservation retryOf(String orderId, String sku, int quantity) {
+        Reservation existing = activeReservations.get(orderId);
+        if (existing == null) {
+            existing = confirmedReservations.get(orderId);
+        }
+        if (existing == null) {
+            return null;
+        }
+        if (existing.sku().equals(sku) && existing.quantity() == quantity) {
+            return existing;
+        }
+        throw new IllegalStateException("Order " + orderId + " was already placed with different data");
+    }
+
     void confirm(String orderId, Instant now) {
         releaseExpiredReservations(now);
-        if (!(activeReservations.remove(orderId) instanceof Reservation(var o, var s, int quantity, var expiresAt))) {
+        if (!(activeReservations.remove(orderId) instanceof Reservation reservation)) {
             throw new IllegalStateException("No active reservation for order " + orderId);
         }
-        confirmed += quantity;
+        confirmedReservations.put(orderId, reservation);
     }
 
     int available(Instant now) {
         releaseExpiredReservations(now);
         int reserved = activeReservations.values().stream().mapToInt(Reservation::quantity).sum();
+        int confirmed = confirmedReservations.values().stream().mapToInt(Reservation::quantity).sum();
         return stock - confirmed - reserved;
     }
 

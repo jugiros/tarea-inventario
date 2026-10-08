@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.store.inventory.api.OrderLimitExceededException;
 import com.store.inventory.api.ProductCategory;
+import com.store.inventory.api.Reservation;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
@@ -90,5 +91,45 @@ class ProductTest {
         product.reserve("ORDER-2", "SKU-1", 5, afterExpiry);
 
         assertEquals(0, product.available(afterExpiry));
+    }
+
+    @Test
+    void retryingTheSameActiveReservationReturnsTheSameOneWithoutDoubleCounting() {
+        product.addStock(10);
+        Reservation first = product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Reservation retry = product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        assertEquals(first, retry);
+        assertEquals(5, product.available(NOW));
+    }
+
+    @Test
+    void retryingWithDifferentQuantityForTheSameOrderIsRejected() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        assertThrows(IllegalStateException.class, () -> product.reserve("ORDER-1", "SKU-1", 6, NOW));
+    }
+
+    @Test
+    void retryingAfterTheOrderWasAlreadyConfirmedReturnsTheConfirmedReservation() {
+        product.addStock(10);
+        Reservation first = product.reserve("ORDER-1", "SKU-1", 5, NOW);
+        product.confirm("ORDER-1", NOW);
+
+        Reservation retry = product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        assertEquals(first, retry);
+        assertEquals(5, product.available(NOW));
+    }
+
+    @Test
+    void retryingWithDifferentQuantityAfterConfirmationIsRejected() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+        product.confirm("ORDER-1", NOW);
+
+        assertThrows(IllegalStateException.class, () -> product.reserve("ORDER-1", "SKU-1", 6, NOW));
     }
 }

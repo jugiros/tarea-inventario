@@ -40,6 +40,10 @@ class InMemoryInventoryService implements InventoryService {
 
     @Override
     public Reservation reserve(String orderId, String sku, int quantity) {
+        String previousSku = skuByOrderId.get(orderId);
+        if (previousSku != null && !previousSku.equals(sku)) {
+            throw new IllegalStateException("Order " + orderId + " was already placed for product " + previousSku);
+        }
         Product product = products.get(sku);
         if (product == null) {
             throw new InsufficientStockException(sku, quantity, 0);
