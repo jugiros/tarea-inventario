@@ -48,6 +48,39 @@ class InMemoryInventoryServiceTest {
     }
 
     @Test
+    void availableForAnUnknownSkuIsZero() {
+        assertEquals(0, service.available("UNKNOWN-SKU"));
+    }
+
+    @Test
+    void addingStockToAnUnregisteredProductIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> service.addStock("UNKNOWN-SKU", 10));
+    }
+
+    @Test
+    void confirmingAnOrderThatWasNeverReservedIsRejected() {
+        assertThrows(IllegalStateException.class, () -> service.confirm("NEVER-RESERVED"));
+    }
+
+    @Test
+    void confirmingTheSameOrderTwiceIsRejectedTheSecondTime() {
+        service.reserve("ORDER-1", "SKU-1", 3);
+        service.confirm("ORDER-1");
+
+        assertThrows(IllegalStateException.class, () -> service.confirm("ORDER-1"));
+    }
+
+    @Test
+    void preOrderCategoryAllowsLargeQuantitiesOverALongerWindow() {
+        service.registerProduct("SKU-PREORDER", ProductCategory.PRE_ORDER);
+        service.addStock("SKU-PREORDER", 500);
+
+        service.reserve("ORDER-1", "SKU-PREORDER", 300);
+
+        assertEquals(200, service.available("SKU-PREORDER"));
+    }
+
+    @Test
     void concurrentReservationsNeverOversellStock() throws Exception {
         int stock = 100;
         int attempts = 300;
