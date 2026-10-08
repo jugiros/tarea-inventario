@@ -3,6 +3,7 @@ package com.store.inventory;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.store.inventory.api.InsufficientStockException;
 import com.store.inventory.api.InventoryService;
 import com.store.inventory.api.ProductCategory;
 import java.time.Clock;
@@ -29,6 +30,16 @@ class InMemoryInventoryServiceTest {
         service.reserve("ORDER-1", "SKU-1", 3);
 
         assertThrows(IllegalStateException.class, () -> service.reserve("ORDER-1", "SKU-2", 3));
+    }
+
+    @Test
+    void reservingNonPositiveQuantityIsRejectedEvenForAnUnknownSku() {
+        assertThrows(IllegalArgumentException.class, () -> service.reserve("ORDER-1", "UNKNOWN-SKU", -5));
+    }
+
+    @Test
+    void reservingAnUnknownSkuIsTreatedAsNoStockAvailable() {
+        assertThrows(InsufficientStockException.class, () -> service.reserve("ORDER-1", "UNKNOWN-SKU", 1));
     }
 
     @Test

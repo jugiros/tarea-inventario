@@ -30,17 +30,13 @@ class Product {
     }
 
     void addStock(int quantity) {
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive: " + quantity);
-        }
+        Quantities.requirePositive(quantity);
         stock += quantity;
         lowStockAlerted = false;
     }
 
     Reservation reserve(String orderId, String sku, int quantity, Instant now) {
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive: " + quantity);
-        }
+        Quantities.requirePositive(quantity);
         releaseExpiredReservations(now);
 
         Reservation retried = retryOf(orderId, sku, quantity);
