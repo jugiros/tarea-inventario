@@ -10,6 +10,9 @@ import java.util.Map;
 
 /**
  * A registered product and its stock. Owns all the invariants for a single SKU.
+ * All public operations are synchronized on the instance so concurrent reservations for the
+ * same SKU cannot oversell stock; each SKU has its own lock, so contention never spreads
+ * across unrelated products.
  */
 class Product {
 
@@ -29,13 +32,13 @@ class Product {
         return category;
     }
 
-    void addStock(int quantity) {
+    synchronized void addStock(int quantity) {
         Quantities.requirePositive(quantity);
         stock += quantity;
         lowStockAlerted = false;
     }
 
-    Reservation reserve(String orderId, String sku, int quantity, Instant now) {
+    synchronized Reservation reserve(String orderId, String sku, int quantity, Instant now) {
         Quantities.requirePositive(quantity);
         releaseExpiredReservations(now);
 
@@ -76,7 +79,7 @@ class Product {
         throw new IllegalStateException("Order " + orderId + " was already placed with different data");
     }
 
-    void confirm(String orderId, Instant now) {
+    synchronized void confirm(String orderId, Instant now) {
         releaseExpiredReservations(now);
         if (!(activeReservations.remove(orderId) instanceof Reservation reservation)) {
             throw new IllegalStateException("No active reservation for order " + orderId);
@@ -84,7 +87,7 @@ class Product {
         confirmedReservations.put(orderId, reservation);
     }
 
-    int available(Instant now) {
+    synchronized int available(Instant now) {
         releaseExpiredReservations(now);
         int reserved = activeReservations.values().stream().mapToInt(Reservation::quantity).sum();
         int confirmed = confirmedReservations.values().stream().mapToInt(Reservation::quantity).sum();
@@ -95,7 +98,7 @@ class Product {
      * Returns true the first time stock drops to the low-stock threshold or below, and stays false
      * on every subsequent call until the product is restocked.
      */
-    boolean shouldAlertLowStock(Instant now) {
+    synchronized boolean shouldAlertLowStock(Instant now) {
         if (lowStockAlerted || available(now) > LOW_STOCK_THRESHOLD) {
             return false;
         }

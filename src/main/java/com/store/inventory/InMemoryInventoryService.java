@@ -7,8 +7,8 @@ import com.store.inventory.api.Reservation;
 import com.store.inventory.api.StockAlertListener;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory implementation of {@link InventoryService}.
@@ -17,8 +17,8 @@ class InMemoryInventoryService implements InventoryService {
 
     private final Clock clock;
     private final StockAlertListener alertListener;
-    private final Map<String, Product> products = new HashMap<>();
-    private final Map<String, String> skuByOrderId = new HashMap<>();
+    private final Map<String, Product> products = new ConcurrentHashMap<>();
+    private final Map<String, String> skuByOrderId = new ConcurrentHashMap<>();
 
     InMemoryInventoryService(Clock clock, StockAlertListener alertListener) {
         this.clock = clock;
@@ -42,7 +42,7 @@ class InMemoryInventoryService implements InventoryService {
     @Override
     public Reservation reserve(String orderId, String sku, int quantity) {
         Quantities.requirePositive(quantity);
-        String previousSku = skuByOrderId.get(orderId);
+        String previousSku = skuByOrderId.putIfAbsent(orderId, sku);
         if (previousSku != null && !previousSku.equals(sku)) {
             throw new IllegalStateException("Order " + orderId + " was already placed for product " + previousSku);
         }
@@ -52,7 +52,6 @@ class InMemoryInventoryService implements InventoryService {
         }
         Instant now = clock.instant();
         Reservation reservation = product.reserve(orderId, sku, quantity, now);
-        skuByOrderId.put(orderId, sku);
         if (product.shouldAlertLowStock(now)) {
             notifyLowStock(sku, product.available(now));
         }

@@ -9,6 +9,11 @@ import com.store.inventory.api.ProductCategory;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +45,42 @@ class InMemoryInventoryServiceTest {
     @Test
     void reservingAnUnknownSkuIsTreatedAsNoStockAvailable() {
         assertThrows(InsufficientStockException.class, () -> service.reserve("ORDER-1", "UNKNOWN-SKU", 1));
+    }
+
+    @Test
+    void concurrentReservationsNeverOversellStock() throws Exception {
+        int stock = 100;
+        int attempts = 300;
+        service.registerProduct("SKU-CONCURRENT", ProductCategory.STANDARD);
+        service.addStock("SKU-CONCURRENT", stock);
+
+        ExecutorService pool = Executors.newFixedThreadPool(32);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger succeeded = new AtomicInteger();
+
+        List<Future<?>> tasks = new ArrayList<>();
+        for (int i = 0; i < attempts; i++) {
+            String orderId = "CONCURRENT-ORDER-" + i;
+            tasks.add(pool.submit(() -> {
+                start.await();
+                try {
+                    service.reserve(orderId, "SKU-CONCURRENT", 1);
+                    succeeded.incrementAndGet();
+                } catch (InsufficientStockException expectedOnceSoldOut) {
+                    // expected once the stock runs out
+                }
+                return null;
+            }));
+        }
+
+        start.countDown();
+        for (Future<?> task : tasks) {
+            task.get();
+        }
+        pool.shutdown();
+
+        assertEquals(stock, succeeded.get());
+        assertEquals(0, service.available("SKU-CONCURRENT"));
     }
 
     @Test
