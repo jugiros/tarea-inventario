@@ -51,8 +51,9 @@ class Product {
         if (quantity > policy.orderLimit()) {
             throw new OrderLimitExceededException(sku, quantity, policy.orderLimit());
         }
-        if (quantity > available(now)) {
-            throw new InsufficientStockException(sku, quantity, available(now));
+        int availableNow = available(now);
+        if (quantity > availableNow) {
+            throw new InsufficientStockException(sku, quantity, availableNow);
         }
         Reservation reservation = new Reservation(orderId, sku, quantity, now.plus(policy.reservationTtl()));
         activeReservations.put(orderId, reservation);
