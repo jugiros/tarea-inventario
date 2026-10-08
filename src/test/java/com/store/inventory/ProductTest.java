@@ -153,6 +153,28 @@ class ProductTest {
     }
 
     @Test
+    void preOrderReservationStaysActiveJustBeforeTheTwentyFourHourWindow() {
+        Product preOrderProduct = new Product(ProductCategory.PRE_ORDER);
+        preOrderProduct.addStock(10);
+        preOrderProduct.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Instant almostADayLater = NOW.plusSeconds(23 * 3600 + 59 * 60);
+
+        assertEquals(5, preOrderProduct.available(almostADayLater));
+    }
+
+    @Test
+    void preOrderReservationExpiresAfterTwentyFourHours() {
+        Product preOrderProduct = new Product(ProductCategory.PRE_ORDER);
+        preOrderProduct.addStock(10);
+        preOrderProduct.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Instant justOverADayLater = NOW.plusSeconds(24 * 3600 + 60);
+
+        assertEquals(10, preOrderProduct.available(justOverADayLater));
+    }
+
+    @Test
     void restockingAllowsTheAlertToSignalAgainOnTheNextDrop() {
         product.addStock(10);
         product.reserve("ORDER-1", "SKU-1", 5, NOW); // 5 left, at the threshold
