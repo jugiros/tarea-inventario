@@ -50,11 +50,10 @@ class Product {
     }
 
     void confirm(String orderId) {
-        Reservation reservation = activeReservations.remove(orderId);
-        if (reservation == null) {
+        if (!(activeReservations.remove(orderId) instanceof Reservation(var o, var s, int quantity, var expiresAt))) {
             throw new IllegalStateException("No active reservation for order " + orderId);
         }
-        confirmed += reservation.quantity();
+        confirmed += quantity;
     }
 
     int available() {
