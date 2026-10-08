@@ -1,7 +1,9 @@
 package com.store.inventory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.store.inventory.api.OrderLimitExceededException;
 import com.store.inventory.api.ProductCategory;
@@ -131,5 +133,34 @@ class ProductTest {
         product.confirm("ORDER-1", NOW);
 
         assertThrows(IllegalStateException.class, () -> product.reserve("ORDER-1", "SKU-1", 6, NOW));
+    }
+
+    @Test
+    void reachingTheLowStockThresholdSignalsOnce() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        assertTrue(product.shouldAlertLowStock(NOW));
+        assertFalse(product.shouldAlertLowStock(NOW));
+    }
+
+    @Test
+    void stayingAboveTheLowStockThresholdDoesNotSignal() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 2, NOW);
+
+        assertFalse(product.shouldAlertLowStock(NOW));
+    }
+
+    @Test
+    void restockingAllowsTheAlertToSignalAgainOnTheNextDrop() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW); // 5 left, at the threshold
+        assertTrue(product.shouldAlertLowStock(NOW));
+
+        product.addStock(10); // 15 left, well above the threshold
+        product.reserve("ORDER-2", "SKU-1", 10, NOW); // 5 left again
+
+        assertTrue(product.shouldAlertLowStock(NOW));
     }
 }

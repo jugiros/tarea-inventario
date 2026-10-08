@@ -13,10 +13,13 @@ import java.util.Map;
  */
 class Product {
 
+    private static final int LOW_STOCK_THRESHOLD = 5;
+
     private final ProductCategory category;
     private final Map<String, Reservation> activeReservations = new HashMap<>();
     private final Map<String, Reservation> confirmedReservations = new HashMap<>();
     private int stock;
+    private boolean lowStockAlerted;
 
     Product(ProductCategory category) {
         this.category = category;
@@ -31,6 +34,7 @@ class Product {
             throw new IllegalArgumentException("Quantity must be positive: " + quantity);
         }
         stock += quantity;
+        lowStockAlerted = false;
     }
 
     Reservation reserve(String orderId, String sku, int quantity, Instant now) {
@@ -89,6 +93,18 @@ class Product {
         int reserved = activeReservations.values().stream().mapToInt(Reservation::quantity).sum();
         int confirmed = confirmedReservations.values().stream().mapToInt(Reservation::quantity).sum();
         return stock - confirmed - reserved;
+    }
+
+    /**
+     * Returns true the first time stock drops to the low-stock threshold or below, and stays false
+     * on every subsequent call until the product is restocked.
+     */
+    boolean shouldAlertLowStock(Instant now) {
+        if (lowStockAlerted || available(now) > LOW_STOCK_THRESHOLD) {
+            return false;
+        }
+        lowStockAlerted = true;
+        return true;
     }
 
     private void releaseExpiredReservations(Instant now) {

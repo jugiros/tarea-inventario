@@ -69,6 +69,12 @@ public final class InventoryDemo {
         } catch (RuntimeException e) {
             System.out.println("Expected failure retrying the same order with different data: " + e.getMessage());
         }
+
+        service.registerProduct("SKU-5", ProductCategory.STANDARD);
+        service.addStock("SKU-5", 10);
+        service.reserve("ORDER-6", "SKU-5", 5); // leaves 5, triggers the alert above
+        service.reserve("ORDER-7", "SKU-5", 1); // leaves 4, same alert is not repeated
+        System.out.println("Reserved twice below the threshold: alert fires only once per restock cycle");
     }
 
     /**

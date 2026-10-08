@@ -6,6 +6,7 @@ import com.store.inventory.api.ProductCategory;
 import com.store.inventory.api.Reservation;
 import com.store.inventory.api.StockAlertListener;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -48,9 +49,24 @@ class InMemoryInventoryService implements InventoryService {
         if (product == null) {
             throw new InsufficientStockException(sku, quantity, 0);
         }
-        Reservation reservation = product.reserve(orderId, sku, quantity, clock.instant());
+        Instant now = clock.instant();
+        Reservation reservation = product.reserve(orderId, sku, quantity, now);
         skuByOrderId.put(orderId, sku);
+        if (product.shouldAlertLowStock(now)) {
+            notifyLowStock(sku, product.available(now));
+        }
         return reservation;
+    }
+
+    /**
+     * A broken or slow notification channel must never roll back a reservation that already succeeded.
+     */
+    private void notifyLowStock(String sku, int availableUnits) {
+        try {
+            alertListener.onLowStock(sku, availableUnits);
+        } catch (RuntimeException e) {
+            System.err.println("Failed to notify low stock for " + sku + ": " + e.getMessage());
+        }
     }
 
     @Override
