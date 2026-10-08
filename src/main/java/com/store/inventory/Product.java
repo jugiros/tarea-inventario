@@ -1,6 +1,7 @@
 package com.store.inventory;
 
 import com.store.inventory.api.InsufficientStockException;
+import com.store.inventory.api.OrderLimitExceededException;
 import com.store.inventory.api.ProductCategory;
 import com.store.inventory.api.Reservation;
 import java.time.Instant;
@@ -35,6 +36,10 @@ class Product {
     Reservation reserve(String orderId, String sku, int quantity, Instant expiresAt) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("Quantity must be positive: " + quantity);
+        }
+        int orderLimit = CategoryPolicies.of(category).orderLimit();
+        if (quantity > orderLimit) {
+            throw new OrderLimitExceededException(sku, quantity, orderLimit);
         }
         if (quantity > available()) {
             throw new InsufficientStockException(sku, quantity, available());
