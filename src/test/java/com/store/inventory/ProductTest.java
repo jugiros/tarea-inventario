@@ -10,19 +10,19 @@ import org.junit.jupiter.api.Test;
 
 class ProductTest {
 
-    private static final Instant EXPIRES_AT = Instant.parse("2024-01-01T00:00:00Z");
+    private static final Instant NOW = Instant.parse("2024-01-01T00:00:00Z");
 
     private final Product product = new Product(ProductCategory.STANDARD);
 
     @Test
     void newProductHasNoAvailableStock() {
-        assertEquals(0, product.available());
+        assertEquals(0, product.available(NOW));
     }
 
     @Test
     void addingStockIncreasesAvailable() {
         product.addStock(10);
-        assertEquals(10, product.available());
+        assertEquals(10, product.available(NOW));
     }
 
     @Test
@@ -37,7 +37,7 @@ class ProductTest {
         flashSaleProduct.addStock(10);
 
         assertThrows(OrderLimitExceededException.class,
-                () -> flashSaleProduct.reserve("ORDER-1", "SKU-1", 3, EXPIRES_AT));
+                () -> flashSaleProduct.reserve("ORDER-1", "SKU-1", 3, NOW));
     }
 
     @Test
@@ -45,8 +45,50 @@ class ProductTest {
         Product flashSaleProduct = new Product(ProductCategory.FLASH_SALE);
         flashSaleProduct.addStock(10);
 
-        flashSaleProduct.reserve("ORDER-1", "SKU-1", 2, EXPIRES_AT);
+        flashSaleProduct.reserve("ORDER-1", "SKU-1", 2, NOW);
 
-        assertEquals(8, flashSaleProduct.available());
+        assertEquals(8, flashSaleProduct.available(NOW));
+    }
+
+    @Test
+    void reservationStillBlocksStockBeforeItExpires() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Instant beforeExpiry = NOW.plusSeconds(14 * 60);
+
+        assertEquals(5, product.available(beforeExpiry));
+    }
+
+    @Test
+    void reservationReleasesStockOnceItExpires() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Instant afterExpiry = NOW.plusSeconds(16 * 60);
+
+        assertEquals(10, product.available(afterExpiry));
+    }
+
+    @Test
+    void confirmingAnExpiredReservationIsRejected() {
+        product.addStock(10);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Instant afterExpiry = NOW.plusSeconds(16 * 60);
+
+        assertThrows(IllegalStateException.class, () -> product.confirm("ORDER-1", afterExpiry));
+    }
+
+    @Test
+    void expiredReservationCanBeReplacedByANewOrder() {
+        product.addStock(5);
+        product.reserve("ORDER-1", "SKU-1", 5, NOW);
+
+        Instant afterExpiry = NOW.plusSeconds(16 * 60);
+
+        product.reserve("ORDER-2", "SKU-1", 5, afterExpiry);
+
+        assertEquals(0, product.available(afterExpiry));
     }
 }

@@ -6,7 +6,6 @@ import com.store.inventory.api.ProductCategory;
 import com.store.inventory.api.Reservation;
 import com.store.inventory.api.StockAlertListener;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,8 +44,7 @@ class InMemoryInventoryService implements InventoryService {
         if (product == null) {
             throw new InsufficientStockException(sku, quantity, 0);
         }
-        Instant expiresAt = clock.instant().plus(CategoryPolicies.of(product.category()).reservationTtl());
-        Reservation reservation = product.reserve(orderId, sku, quantity, expiresAt);
+        Reservation reservation = product.reserve(orderId, sku, quantity, clock.instant());
         skuByOrderId.put(orderId, sku);
         return reservation;
     }
@@ -57,13 +55,13 @@ class InMemoryInventoryService implements InventoryService {
         if (sku == null) {
             throw new IllegalStateException("No active reservation for order " + orderId);
         }
-        products.get(sku).confirm(orderId);
+        products.get(sku).confirm(orderId, clock.instant());
         skuByOrderId.remove(orderId);
     }
 
     @Override
     public int available(String sku) {
         Product product = products.get(sku);
-        return product == null ? 0 : product.available();
+        return product == null ? 0 : product.available(clock.instant());
     }
 }

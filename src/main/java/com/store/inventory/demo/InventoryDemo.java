@@ -4,6 +4,8 @@ import com.store.inventory.Inventory;
 import com.store.inventory.api.InventoryService;
 import com.store.inventory.api.ProductCategory;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 
 /**
  * Manual exploration tool, not part of the production API. Run with:
@@ -12,7 +14,8 @@ import java.time.Clock;
 public final class InventoryDemo {
 
     public static void main(String[] args) {
-        InventoryService service = Inventory.create(Clock.systemUTC(),
+        MutableClock clock = new MutableClock(Instant.parse("2024-01-01T00:00:00Z"));
+        InventoryService service = Inventory.create(clock,
                 (sku, available) -> System.out.println("[ALERT] Low stock for " + sku + ": " + available + " left"));
 
         service.registerProduct("SKU-1", ProductCategory.STANDARD);
@@ -38,6 +41,50 @@ public final class InventoryDemo {
             service.reserve("ORDER-3", "SKU-2", 3);
         } catch (RuntimeException e) {
             System.out.println("Expected failure reserving above the flash sale order limit: " + e.getMessage());
+        }
+
+        service.registerProduct("SKU-3", ProductCategory.FLASH_SALE);
+        service.addStock("SKU-3", 2);
+        service.reserve("ORDER-4", "SKU-3", 2);
+        System.out.println("Available right after reserving (not yet expired): " + service.available("SKU-3"));
+
+        clock.advance(java.time.Duration.ofMinutes(6));
+        System.out.println("Available 6 minutes later, past the 5-minute flash sale TTL: " + service.available("SKU-3"));
+
+        try {
+            service.confirm("ORDER-4");
+        } catch (RuntimeException e) {
+            System.out.println("Expected failure confirming an expired reservation: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Clock whose instant can be moved forward on demand, to simulate time passing without waiting.
+     */
+    private static final class MutableClock extends Clock {
+        private Instant instant;
+
+        private MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        void advance(java.time.Duration duration) {
+            instant = instant.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
         }
     }
 }
